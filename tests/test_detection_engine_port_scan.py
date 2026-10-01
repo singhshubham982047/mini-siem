@@ -17,47 +17,59 @@ TEST_SOURCE_IP = "10.60.70.100"
 
 
 def cleanup_previous_test_data(db):
-    """Safely remove records belonging to this test."""
+    """Clean up records created by this port-scan test."""
 
     sources = db.scalars(
         select(LogSource).where(LogSource.name == TEST_SOURCE_NAME)
     ).all()
 
-    for source in sources:
-        events = db.scalars(select(Event).where(Event.log_source_id == source.id)).all()
+    source_ids = [source.id for source in sources]
 
-        alerts = db.scalars(
-            select(Alert).where(
-                Alert.rule_name == "port_scan",
-                Alert.src_ip == TEST_SOURCE_IP,
-            )
-        ).all()
+    alerts = db.scalars(
+        select(Alert).where(
+            Alert.rule_name == "port_scan",
+            Alert.src_ip == TEST_SOURCE_IP,
+        )
+    ).all()
 
+    alert_ids = [alert.id for alert in alerts]
+
+    # Delete incidents first, then alert-event links.
+    if alert_ids:
+        db.query(Incident).filter(Incident.alert_id.in_(alert_ids)).delete(
+            synchronize_session=False
+        )
+
+        db.flush()
+
+        db.query(AlertEvent).filter(AlertEvent.alert_id.in_(alert_ids)).delete(
+            synchronize_session=False
+        )
+
+        db.flush()
+
+        # Expunge loaded alert objects so ORM cascades don't
+        # try to delete the already-removed relationship rows.
         for alert in alerts:
-            # Delete relationship records through the ORM.
-            links = db.scalars(
-                select(AlertEvent).where(AlertEvent.alert_id == alert.id)
-            ).all()
+            db.expunge(alert)
 
-            for link in links:
-                db.delete(link)
+        db.query(Alert).filter(Alert.id.in_(alert_ids)).delete(
+            synchronize_session=False
+        )
 
-            # Delete incidents before their parent alert.
-            incidents = db.scalars(
-                select(Incident).where(Incident.alert_id == alert.id)
-            ).all()
+        db.flush()
 
-            for incident in incidents:
-                db.delete(incident)
+    # Delete only events owned by this test's log sources.
+    if source_ids:
+        db.query(Event).filter(Event.log_source_id.in_(source_ids)).delete(
+            synchronize_session=False
+        )
 
-            db.flush()
-            db.delete(alert)
+        db.flush()
 
-        # Remove events belonging to this test source.
-        for event in events:
-            db.delete(event)
-
-        db.delete(source)
+        db.query(LogSource).filter(LogSource.id.in_(source_ids)).delete(
+            synchronize_session=False
+        )
 
     db.commit()
 
