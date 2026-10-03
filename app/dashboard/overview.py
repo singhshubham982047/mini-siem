@@ -15,9 +15,7 @@ from app.dashboard.data import (
 
 def render_overview(days):
     st.subheader("Security Overview")
-    st.caption(
-        "Security activity recorded in the selected time range."
-    )
+    st.caption("Security activity recorded in the selected time range.")
 
     start, end = get_time_range(days)
 
@@ -52,9 +50,7 @@ def render_overview(days):
     )
 
     enabled_sources = fetch_scalar(
-        select(func.count(LogSource.id)).where(
-            LogSource.enabled.is_(True)
-        )
+        select(func.count(LogSource.id)).where(LogSource.enabled.is_(True))
     )
 
     metric1, metric2, metric3, metric4 = st.columns(4)
@@ -79,9 +75,7 @@ def render_overview(days):
         f"{open_incidents:,}",
     )
 
-    st.caption(
-        f"Enabled log sources: {enabled_sources}"
-    )
+    st.caption(f"Enabled log sources: {enabled_sources}")
 
     events_df = get_events(days)
     alerts_df = get_alerts(days)
@@ -113,13 +107,11 @@ def render_overview(days):
 
             st.plotly_chart(
                 fig,
-                use_container_width=True,
+                width="stretch",
             )
 
         else:
-            st.info(
-                "No events found in this time range."
-            )
+            st.info("No events found in this time range.")
 
     with right:
         st.subheader("Alerts by Detection Rule")
@@ -142,13 +134,11 @@ def render_overview(days):
 
             st.plotly_chart(
                 fig,
-                use_container_width=True,
+                width="stretch",
             )
 
         else:
-            st.info(
-                "No alerts found in this time range."
-            )
+            st.info("No alerts found in this time range.")
 
     st.divider()
 
@@ -156,10 +146,8 @@ def render_overview(days):
 
     if not alerts_df.empty:
         st.dataframe(
-            alerts_df.drop(
-                columns=["Description"]
-            ),
-            use_container_width=True,
+            alerts_df.drop(columns=["Description"]),
+            width="stretch",
             hide_index=True,
         )
 
@@ -171,7 +159,7 @@ def render_overview(days):
     if not events_df.empty:
         st.dataframe(
             events_df.head(20),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -182,14 +170,10 @@ def render_overview(days):
 
     if not incidents_df.empty:
         st.dataframe(
-            incidents_df.drop(
-                columns=["Description"]
-            ).head(10),
-            use_container_width=True,
+            incidents_df.drop(columns=["Description"]).head(10),
+            width="stretch",
             hide_index=True,
         )
 
     else:
-        st.info(
-            "No incidents found in the selected period."
-        )
+        st.info("No incidents found in the selected period.")

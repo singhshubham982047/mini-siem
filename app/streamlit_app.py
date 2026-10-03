@@ -65,7 +65,7 @@ days = st.sidebar.selectbox(
 
 if st.sidebar.button(
     "↻ Refresh dashboard",
-    use_container_width=True,
+    width="stretch",
 ):
     st.rerun()
 

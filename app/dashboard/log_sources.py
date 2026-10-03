@@ -9,9 +9,7 @@ def render_log_sources():
     sources_df = get_log_sources()
 
     if sources_df.empty:
-        st.info(
-            "No log sources are registered yet."
-        )
+        st.info("No log sources are registered yet.")
 
     else:
         source1, source2 = st.columns(2)
@@ -23,16 +21,12 @@ def render_log_sources():
 
         source2.metric(
             "Enabled Sources",
-            int(
-                sources_df["Enabled"]
-                .fillna(False)
-                .sum()
-            ),
+            int(sources_df["Enabled"].fillna(False).sum()),
         )
 
         st.dataframe(
             sources_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
