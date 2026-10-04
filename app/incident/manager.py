@@ -44,11 +44,29 @@ class IncidentManager:
         # 2. Determine the reference time
         # --------------------------------------------------
 
-        if reference_time is None and alert.src_ip:
+        if reference_time is None:
+            latest_event = None
 
-            # Authentication alerts use failed authentication
-            # events to determine the reference timestamp.
-            if alert.rule_name in {
+            # ----------------------------------------------
+            # Sudo authentication alerts
+            # ----------------------------------------------
+            if alert.rule_name == "sudo_authentication_failure" and alert.username:
+                latest_event = db.scalars(
+                    select(Event)
+                    .where(
+                        Event.username == alert.username,
+                        Event.event_type == "authentication",
+                        Event.action == "sudo_authentication",
+                        Event.status == "failure",
+                    )
+                    .order_by(Event.timestamp.desc())
+                    .limit(1)
+                ).first()
+
+            # ----------------------------------------------
+            # IP-based authentication alerts
+            # ----------------------------------------------
+            elif alert.src_ip and alert.rule_name in {
                 "ssh_brute_force",
                 "successful_login_after_failures",
                 "multiple_users_same_ip",
@@ -64,8 +82,10 @@ class IncidentManager:
                     .limit(1)
                 ).first()
 
-            # Port scan alerts use network connection events.
-            elif alert.rule_name == "port_scan":
+            # ----------------------------------------------
+            # Port scan alerts
+            # ----------------------------------------------
+            elif alert.src_ip and alert.rule_name == "port_scan":
                 latest_event = db.scalars(
                     select(Event)
                     .where(
@@ -76,9 +96,6 @@ class IncidentManager:
                     .order_by(Event.timestamp.desc())
                     .limit(1)
                 ).first()
-
-            else:
-                latest_event = None
 
             if latest_event:
                 reference_time = latest_event.timestamp
@@ -104,20 +121,35 @@ class IncidentManager:
 
         related_events = []
 
-        if reference_time is not None and alert.src_ip:
-
+        if reference_time is not None:
             window_start = reference_time - timedelta(minutes=window_minutes)
 
             # ----------------------------------------------
-            # Authentication alerts
+            # Sudo authentication alerts
             # ----------------------------------------------
+            if alert.rule_name == "sudo_authentication_failure" and alert.username:
+                statement = (
+                    select(Event)
+                    .where(
+                        Event.username == alert.username,
+                        Event.event_type == "authentication",
+                        Event.action == "sudo_authentication",
+                        Event.status == "failure",
+                        Event.timestamp >= window_start,
+                        Event.timestamp <= reference_time,
+                    )
+                    .order_by(Event.timestamp.asc())
+                )
+                related_events = db.scalars(statement).all()
 
-            if alert.rule_name in {
+            # ----------------------------------------------
+            # IP-based authentication alerts
+            # ----------------------------------------------
+            elif alert.src_ip and alert.rule_name in {
                 "ssh_brute_force",
                 "successful_login_after_failures",
                 "multiple_users_same_ip",
             }:
-
                 statement = (
                     select(Event)
                     .where(
@@ -129,15 +161,12 @@ class IncidentManager:
                     )
                     .order_by(Event.timestamp.asc())
                 )
-
                 related_events = db.scalars(statement).all()
 
             # ----------------------------------------------
             # Port scan alerts
             # ----------------------------------------------
-
-            elif alert.rule_name == "port_scan":
-
+            elif alert.src_ip and alert.rule_name == "port_scan":
                 statement = (
                     select(Event)
                     .where(
@@ -149,7 +178,6 @@ class IncidentManager:
                     )
                     .order_by(Event.timestamp.asc())
                 )
-
                 related_events = db.scalars(statement).all()
 
         # --------------------------------------------------
@@ -157,7 +185,6 @@ class IncidentManager:
         # --------------------------------------------------
 
         for event in related_events:
-
             existing_link = db.scalars(
                 select(AlertEvent)
                 .where(
@@ -174,7 +201,6 @@ class IncidentManager:
                 alert_id=alert.id,
                 event_id=event.id,
             )
-
             db.add(alert_event)
 
         # --------------------------------------------------

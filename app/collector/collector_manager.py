@@ -43,9 +43,11 @@ class CollectorManager:
             return
 
         print(
-            f"Parsed authentication event: "
-            f"{parsed_event['username']} "
-            f"from {parsed_event['src_ip']}"
+            f"Parsed event: "
+            f"{parsed_event['event_type']} | "
+            f"{parsed_event['action']} | "
+            f"user={parsed_event['username']} | "
+            f"src_ip={parsed_event['src_ip']}"
         )
 
         # 2. Store the parsed event

@@ -48,6 +48,15 @@ RULES = [
         "threshold": 5,
         "window_minutes": 5,
     },
+    {
+        "name": "sudo_authentication_failure",
+        "description": "Detects repeated failed sudo authentication attempts",
+        "rule_type": "authentication",
+        "severity": "high",
+        "threshold": 3,
+        "window_minutes": 5,
+        "enabled": True,
+    },
 ]
 
 

@@ -6,6 +6,7 @@ from app.dashboard.security_events import render_security_events
 from app.dashboard.alerts import render_alerts
 from app.dashboard.incidents import render_incidents
 from app.dashboard.log_sources import render_log_sources
+from app.dashboard.detection_rules import render_detection_rules
 
 # ---------------------------------------------------------
 # PAGE CONFIGURATION
@@ -53,6 +54,7 @@ page = st.sidebar.radio(
         "Alerts",
         "Incidents",
         "Log Sources",
+        "Detection Rules",
     ],
 )
 
@@ -115,6 +117,8 @@ elif page == "Incidents":
 elif page == "Log Sources":
     render_log_sources()
 
+elif page == "Detection Rules":
+    render_detection_rules()
 
 # ---------------------------------------------------------
 # FOOTER

@@ -6,6 +6,8 @@ from app.detection.suspicious_login import SuspiciousLoginDetector
 from app.detection.multiple_users import MultipleUsersDetector
 from app.detection.port_scan import PortScanDetector
 from app.incident.manager import IncidentManager
+from app.services.detection_rule_service import is_rule_enabled
+from app.detection.sudo_authentication import SudoAuthenticationDetector
 
 
 class DetectionEngine:
@@ -38,6 +40,7 @@ class DetectionEngine:
             event.event_type == "authentication"
             and event.status == "failure"
             and event.src_ip
+            and is_rule_enabled("ssh_brute_force")
         ):
             alert = BruteForceDetector.detect(
                 db=db,
@@ -68,6 +71,7 @@ class DetectionEngine:
             event.event_type == "authentication"
             and event.status == "success"
             and event.src_ip
+            and is_rule_enabled("successful_login_after_failures")
         ):
             alert = SuspiciousLoginDetector.detect(
                 db=db,
@@ -97,6 +101,7 @@ class DetectionEngine:
             event.event_type == "authentication"
             and event.status == "failure"
             and event.src_ip
+            and is_rule_enabled("multiple_users_same_ip")
         ):
             alert = MultipleUsersDetector.detect(
                 db=db,
@@ -127,6 +132,7 @@ class DetectionEngine:
             event.event_type == "network_connection"
             and event.src_ip
             and event.dst_port is not None
+            and is_rule_enabled("port_scan")
         ):
             alert = PortScanDetector.detect(
                 db=db,
@@ -148,5 +154,16 @@ class DetectionEngine:
                 print(f"  Alert ID: {alert.id}")
                 print(f"  Severity: {incident.severity}")
                 print(f"  Status: {incident.status}")
+
+        if is_rule_enabled("sudo_authentication_failure"):
+            alert = SudoAuthenticationDetector.detect(
+                db=db,
+                event=event,
+                threshold=3,
+                window_minutes=5,
+            )
+
+            if alert:
+                alerts.append(alert)
 
         return alerts
