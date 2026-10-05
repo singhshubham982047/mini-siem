@@ -5,9 +5,9 @@ from app.detection.brute_force import BruteForceDetector
 from app.detection.suspicious_login import SuspiciousLoginDetector
 from app.detection.multiple_users import MultipleUsersDetector
 from app.detection.port_scan import PortScanDetector
+from app.detection.sudo_authentication import SudoAuthenticationDetector
 from app.incident.manager import IncidentManager
 from app.services.detection_rule_service import is_rule_enabled
-from app.detection.sudo_authentication import SudoAuthenticationDetector
 
 
 class DetectionEngine:
@@ -15,6 +15,35 @@ class DetectionEngine:
     Central engine responsible for running
     security detection rules against events.
     """
+
+    @staticmethod
+    def _handle_alert(
+        db: Session,
+        alert,
+        event: Event,
+        alerts: list,
+    ) -> None:
+        """
+        Record a generated alert, create its incident,
+        and print a summary.
+
+        This is only ever called when an alert exists,
+        so `incident` is always assigned before use.
+        """
+
+        alerts.append(alert)
+
+        incident = IncidentManager.create_for_alert(
+            db=db,
+            alert=alert,
+            reference_time=event.timestamp,
+        )
+
+        print("\n🚨 INCIDENT CREATED")
+        print(f"  Incident ID: {incident.id}")
+        print(f"  Alert ID: {alert.id}")
+        print(f"  Severity: {incident.severity}")
+        print(f"  Status: {incident.status}")
 
     @classmethod
     def process_event(
@@ -49,19 +78,7 @@ class DetectionEngine:
             )
 
             if alert:
-                alerts.append(alert)
-
-                incident = IncidentManager.create_for_alert(
-                    db=db,
-                    alert=alert,
-                    reference_time=event.timestamp,
-                )
-
-                print("\n🚨 INCIDENT CREATED")
-                print(f"  Incident ID: {incident.id}")
-                print(f"  Alert ID: {alert.id}")
-                print(f"  Severity: {incident.severity}")
-                print(f"  Status: {incident.status}")
+                cls._handle_alert(db, alert, event, alerts)
 
         # ==================================================
         # RULE 2: SUCCESSFUL LOGIN AFTER MULTIPLE FAILURES
@@ -79,19 +96,7 @@ class DetectionEngine:
             )
 
             if alert:
-                alerts.append(alert)
-
-                incident = IncidentManager.create_for_alert(
-                    db=db,
-                    alert=alert,
-                    reference_time=event.timestamp,
-                )
-
-                print("\n🚨 INCIDENT CREATED")
-                print(f"  Incident ID: {incident.id}")
-                print(f"  Alert ID: {alert.id}")
-                print(f"  Severity: {incident.severity}")
-                print(f"  Status: {incident.status}")
+                cls._handle_alert(db, alert, event, alerts)
 
         # ==================================================
         # RULE 3: MULTIPLE USERS FROM SAME SOURCE IP
@@ -110,19 +115,7 @@ class DetectionEngine:
             )
 
             if alert:
-                alerts.append(alert)
-
-                incident = IncidentManager.create_for_alert(
-                    db=db,
-                    alert=alert,
-                    reference_time=event.timestamp,
-                )
-
-                print("\n🚨 INCIDENT CREATED")
-                print(f"  Incident ID: {incident.id}")
-                print(f"  Alert ID: {alert.id}")
-                print(f"  Severity: {incident.severity}")
-                print(f"  Status: {incident.status}")
+                cls._handle_alert(db, alert, event, alerts)
 
         # ==================================================
         # RULE 4: PORT SCAN
@@ -141,21 +134,18 @@ class DetectionEngine:
             )
 
             if alert:
-                alerts.append(alert)
+                cls._handle_alert(db, alert, event, alerts)
 
-                incident = IncidentManager.create_for_alert(
-                    db=db,
-                    alert=alert,
-                    reference_time=event.timestamp,
-                )
+        # ==================================================
+        # RULE 5: SUDO AUTHENTICATION FAILURE
+        # ==================================================
 
-                print("\n🚨 INCIDENT CREATED")
-                print(f"  Incident ID: {incident.id}")
-                print(f"  Alert ID: {alert.id}")
-                print(f"  Severity: {incident.severity}")
-                print(f"  Status: {incident.status}")
-
-        if is_rule_enabled("sudo_authentication_failure"):
+        if (
+            event.event_type == "authentication"
+            and event.action == "sudo_authentication"
+            and event.status == "failure"
+            and is_rule_enabled("sudo_authentication_failure")
+        ):
             alert = SudoAuthenticationDetector.detect(
                 db=db,
                 event=event,
@@ -164,6 +154,6 @@ class DetectionEngine:
             )
 
             if alert:
-                alerts.append(alert)
+                cls._handle_alert(db, alert, event, alerts)
 
         return alerts
