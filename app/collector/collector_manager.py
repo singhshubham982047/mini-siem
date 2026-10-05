@@ -31,12 +31,19 @@ class CollectorManager:
     def process_log_line(self, raw_log: str):
         """
         Process one newly received log line.
+
+        Errors are caught per line so that a single bad
+        event never stops the collector.
         """
 
         print(f"\nNew log: {raw_log}")
 
         # 1. Parse the raw log
-        parsed_event = AuthLogParser.parse(raw_log)
+        try:
+            parsed_event = AuthLogParser.parse(raw_log)
+        except Exception as exc:
+            print(f"Parser error, line skipped: {exc}")
+            return
 
         if parsed_event is None:
             print("Log ignored: unsupported format")
@@ -51,19 +58,30 @@ class CollectorManager:
         )
 
         # 2. Store the parsed event
-        event = EventRepository.create(
-            db=self.db,
-            log_source_id=self.log_source_id,
-            **parsed_event,
-        )
+        try:
+            event = EventRepository.create(
+                db=self.db,
+                log_source_id=self.log_source_id,
+                **parsed_event,
+            )
+            event_id = event.id
+        except Exception as exc:
+            self.db.rollback()
+            print(f"Database error, event not stored: {exc}")
+            return
 
-        print(f"Event stored in PostgreSQL: ID={event.id}")
+        print(f"Event stored in PostgreSQL: ID={event_id}")
 
         # 3. Run detection rules
-        alerts = DetectionEngine.process_event(
-            db=self.db,
-            event=event,
-        )
+        try:
+            alerts = DetectionEngine.process_event(
+                db=self.db,
+                event=event,
+            )
+        except Exception as exc:
+            self.db.rollback()
+            print(f"Detection error for event ID={event_id}: {exc}")
+            return
 
         # 4. Report generated alerts
         for alert in alerts:

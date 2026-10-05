@@ -13,8 +13,8 @@ from app.dashboard.detection_rules import render_detection_rules
 # ---------------------------------------------------------
 
 st.set_page_config(
-    page_title="Mini SIEM | Security Operations",
-    page_icon="🛡️",
+    page_title="SIEM | Security Operations",
+    page_icon="🦅",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -43,7 +43,7 @@ st.markdown(
 # SIDEBAR
 # ---------------------------------------------------------
 
-st.sidebar.title("🛡️ Mini SIEM")
+st.sidebar.title("🦅 EAGLE")
 st.sidebar.caption("Security Operations Dashboard")
 
 page = st.sidebar.radio(
@@ -81,7 +81,7 @@ st.sidebar.caption("Mini SIEM • Local PostgreSQL")
 
 database_ok, database_error = get_database_status()
 
-st.title("🛡️ Mini SIEM Security Dashboard")
+st.title("🦅 SIEM Security Dashboard")
 
 if database_ok:
     st.success(
@@ -127,6 +127,5 @@ elif page == "Detection Rules":
 st.divider()
 
 st.caption(
-    "Mini SIEM | Local security analytics | "
-    "Data displayed from your PostgreSQL database"
+    "SIEM | Local security analytics | " "Data displayed from your PostgreSQL database"
 )

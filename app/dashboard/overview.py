@@ -84,7 +84,12 @@ def render_overview(days):
     st.divider()
 
     left, right = st.columns(2)
-
+    severity_colors = {
+        "high": "#FF4B4B",  # Streamlit Red
+        "medium": "#FFA500",  # Orange
+        "low": "#008000",  # Green
+        "unknown": "#808080",  # Gray for missing values
+    }
     with left:
         st.subheader("Events by Severity")
 
@@ -103,6 +108,8 @@ def render_overview(days):
                 y="Count",
                 color="Severity",
                 title="Event severity distribution",
+                color_discrete_map=severity_colors,
+                category_orders={"Severity": ["high", "medium", "low", "unknown"]},
             )
 
             st.plotly_chart(
@@ -130,6 +137,9 @@ def render_overview(days):
                 x="Detection Rule",
                 y="Count",
                 title="Detection rule activity",
+                color="Detection Rule",
+                color_discrete_map=severity_colors,
+                category_orders={"Severity": ["high", "medium", "low", "unknown"]},
             )
 
             st.plotly_chart(

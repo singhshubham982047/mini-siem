@@ -52,6 +52,19 @@ class AuthLogParser:
         r"authentication failure;"
         r".*?\buser=(?P<username>\S+)"
     )
+    CRON_SESSION_OPEN_PATTERN = re.compile(
+        r"CRON\[\d+\]:\s+pam_unix\(cron:session\):\s+"
+        r"session opened for user "
+        r"(?P<username>\S+)\(uid=(?P<uid>\d+)\)"
+        r"\s+by\s+"
+        r"(?P<by_user>\S+)\(uid=(?P<by_uid>\d+)\)"
+    )
+
+    CRON_SESSION_CLOSE_PATTERN = re.compile(
+        r"CRON\[\d+\]:\s+pam_unix\(cron:session\):\s+"
+        r"session closed for user "
+        r"(?P<username>\S+)"
+    )
 
     @staticmethod
     def parse_timestamp(log_line: str) -> datetime:
@@ -273,4 +286,45 @@ class AuthLogParser:
                 "raw_log": log_line,
             }
 
+        cron_open_match = cls.CRON_SESSION_OPEN_PATTERN.search(log_line)
+
+        if cron_open_match:
+            username = cron_open_match.group("username")
+
+            return {
+                "timestamp": timestamp,
+                "source": "linux",
+                "event_type": "session",
+                "action": "cron_session_open",
+                "username": username,
+                "src_ip": None,
+                "dst_ip": None,
+                "src_port": None,
+                "dst_port": None,
+                "status": "success",
+                "severity": "low",
+                "message": f"CRON session opened for user {username}",
+                "raw_log": log_line,
+            }
+
+        cron_close_match = cls.CRON_SESSION_CLOSE_PATTERN.search(log_line)
+
+        if cron_close_match:
+            username = cron_close_match.group("username")
+
+            return {
+                "timestamp": timestamp,
+                "source": "linux",
+                "event_type": "session",
+                "action": "cron_session_close",
+                "username": username,
+                "src_ip": None,
+                "dst_ip": None,
+                "src_port": None,
+                "dst_port": None,
+                "status": "success",
+                "severity": "low",
+                "message": f"CRON session closed for user {username}",
+                "raw_log": log_line,
+            }
         return None
