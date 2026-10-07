@@ -6,8 +6,12 @@ from app.detection.suspicious_login import SuspiciousLoginDetector
 from app.detection.multiple_users import MultipleUsersDetector
 from app.detection.port_scan import PortScanDetector
 from app.detection.sudo_authentication import SudoAuthenticationDetector
+from app.detection.suspicious_sudo import SuspiciousSudoDetector
 from app.incident.manager import IncidentManager
 from app.services.detection_rule_service import is_rule_enabled
+from app.detection.repeated_privilege_escalation import (
+    RepeatedPrivilegeEscalationDetector,
+)
 
 
 class DetectionEngine:
@@ -155,5 +159,41 @@ class DetectionEngine:
 
             if alert:
                 cls._handle_alert(db, alert, event, alerts)
+        # ==================================================
+        # RULE 6: SUSPICIOUS SUDO COMMAND
+        # ==================================================
 
+        if (
+            event.event_type == "privilege_escalation"
+            and event.action == "sudo_command"
+            and event.status == "success"
+            and is_rule_enabled("suspicious_sudo_command")
+        ):
+            alert = SuspiciousSudoDetector.detect(
+                db=db,
+                event=event,
+            )
+
+            if alert:
+                cls._handle_alert(db, alert, event, alerts)
+
+        # ==================================================
+        # RULE 7: REPEATED PRIVILEGE ESCALATION
+        # ==================================================
+
+        if (
+            event.event_type == "privilege_escalation"
+            and event.status == "success"
+            and event.username
+            and is_rule_enabled("repeated_privilege_escalation")
+        ):
+            alert = RepeatedPrivilegeEscalationDetector.detect(
+                db=db,
+                event=event,
+                threshold=3,
+                window_minutes=5,
+            )
+
+            if alert:
+                cls._handle_alert(db, alert, event, alerts)
         return alerts

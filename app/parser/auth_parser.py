@@ -97,6 +97,13 @@ class AuthLogParser:
     SYSTEMD_SESSION_CLOSE_PATTERN = re.compile(
         r"systemd-logind\[\d+\]:\s+" r"Removed session (?P<session_id>\S+)\."
     )
+    PKEXEC_SESSION_OPEN_PATTERN = re.compile(
+        r"pkexec:\s+pam_unix\(polkit-1:session\):\s+"
+        r"session opened for user "
+        r"(?P<target_user>\S+)\(uid=(?P<target_uid>\d+)\)"
+        r"\s+by\s+"
+        r"(?P<username>\S+)\(uid=(?P<uid>\d+)\)"
+    )
 
     @staticmethod
     def parse_timestamp(log_line: str) -> datetime:
@@ -484,6 +491,30 @@ class AuthLogParser:
                 "status": "success",
                 "severity": "low",
                 "message": f"Systemd session {session_id} removed",
+                "raw_log": log_line,
+            }
+
+        pkexec_match = cls.PKEXEC_SESSION_OPEN_PATTERN.search(log_line)
+
+        if pkexec_match:
+            username = pkexec_match.group("username")
+            target_user = pkexec_match.group("target_user")
+
+            return {
+                "timestamp": timestamp,
+                "source": "linux",
+                "event_type": "privilege_escalation",
+                "action": "pkexec_session_open",
+                "username": username,
+                "src_ip": None,
+                "dst_ip": None,
+                "src_port": None,
+                "dst_port": None,
+                "status": "success",
+                "severity": "medium",
+                "message": (
+                    f"Pkexec session opened as {target_user} " f"by {username}"
+                ),
                 "raw_log": log_line,
             }
         return None
