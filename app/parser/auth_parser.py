@@ -20,7 +20,12 @@ class AuthLogParser:
         r"from (?P<src_ip>\S+) "
         r"port (?P<src_port>\d+)"
     )
-
+    SUCCESSFUL_PUBLICKEY_PATTERN = re.compile(
+        r"Accepted publickey for "
+        r"(?P<username>\S+) "
+        r"from (?P<src_ip>\S+) "
+        r"port (?P<src_port>\d+)"
+    )
     INVALID_USER_PATTERN = re.compile(
         r"Invalid user " r"(?P<username>\S+) " r"from (?P<src_ip>\S+)"
     )
@@ -64,6 +69,33 @@ class AuthLogParser:
         r"CRON\[\d+\]:\s+pam_unix\(cron:session\):\s+"
         r"session closed for user "
         r"(?P<username>\S+)"
+    )
+    GDM_SESSION_OPEN_PATTERN = re.compile(
+        r"gdm-password\]:\s+pam_unix\(gdm-password:session\):\s+"
+        r"session opened for user "
+        r"(?P<username>\S+)\(uid=(?P<uid>\d+)\)"
+        r"\s+by\s+"
+        r"(?P<by_user>\S+)\(uid=(?P<by_uid>\d+)\)"
+    )
+
+    GDM_SESSION_CLOSE_PATTERN = re.compile(
+        r"gdm-password\]:\s+pam_unix\(gdm-password:session\):\s+"
+        r"session closed for user "
+        r"(?P<username>\S+)"
+    )
+    GDM_KEYRING_UNLOCK_PATTERN = re.compile(
+        r"gdm-password\]:\s+gkr-pam:\s+unlocked login keyring"
+    )
+    SYSTEMD_SESSION_OPEN_PATTERN = re.compile(
+        r"systemd-logind\[\d+\]:\s+"
+        r"New session '(?P<session_id>[^']+)' "
+        r"of user '(?P<username>[^']+)' "
+        r"with class '(?P<session_class>[^']+)' "
+        r"and type '(?P<session_type>[^']+)'"
+    )
+
+    SYSTEMD_SESSION_CLOSE_PATTERN = re.compile(
+        r"systemd-logind\[\d+\]:\s+" r"Removed session (?P<session_id>\S+)\."
     )
 
     @staticmethod
@@ -269,6 +301,24 @@ class AuthLogParser:
                 "raw_log": log_line,
             }
 
+        match = cls.SUCCESSFUL_PUBLICKEY_PATTERN.search(log_line)
+
+        if match:
+            return {
+                "timestamp": timestamp,
+                "source": "linux",
+                "event_type": "authentication",
+                "action": "login",
+                "username": match.group("username"),
+                "src_ip": match.group("src_ip"),
+                "dst_ip": None,
+                "src_port": int(match.group("src_port")),
+                "dst_port": None,
+                "status": "success",
+                "severity": "low",
+                "message": "Successful SSH public-key login",
+                "raw_log": log_line,
+            }
         # Invalid SSH user
         invalid_user_match = cls.INVALID_USER_PATTERN.search(log_line)
 
@@ -325,6 +375,115 @@ class AuthLogParser:
                 "status": "success",
                 "severity": "low",
                 "message": f"CRON session closed for user {username}",
+                "raw_log": log_line,
+            }
+        gdm_open_match = cls.GDM_SESSION_OPEN_PATTERN.search(log_line)
+
+        if gdm_open_match:
+            username = gdm_open_match.group("username")
+
+            return {
+                "timestamp": timestamp,
+                "source": "linux",
+                "event_type": "session",
+                "action": "gdm_session_open",
+                "username": username,
+                "src_ip": None,
+                "dst_ip": None,
+                "src_port": None,
+                "dst_port": None,
+                "status": "success",
+                "severity": "low",
+                "message": f"Desktop login session opened for user {username}",
+                "raw_log": log_line,
+            }
+
+        gdm_close_match = cls.GDM_SESSION_CLOSE_PATTERN.search(log_line)
+
+        if gdm_close_match:
+            username = gdm_close_match.group("username")
+
+            return {
+                "timestamp": timestamp,
+                "source": "linux",
+                "event_type": "session",
+                "action": "gdm_session_close",
+                "username": username,
+                "src_ip": None,
+                "dst_ip": None,
+                "src_port": None,
+                "dst_port": None,
+                "status": "success",
+                "severity": "low",
+                "message": f"Desktop login session closed for user {username}",
+                "raw_log": log_line,
+            }
+
+        gdm_keyring_match = cls.GDM_KEYRING_UNLOCK_PATTERN.search(log_line)
+
+        if gdm_keyring_match:
+            return {
+                "timestamp": timestamp,
+                "source": "linux",
+                "event_type": "authentication",
+                "action": "keyring_unlock",
+                "username": None,
+                "src_ip": None,
+                "dst_ip": None,
+                "src_port": None,
+                "dst_port": None,
+                "status": "success",
+                "severity": "low",
+                "message": "GDM login keyring unlocked",
+                "raw_log": log_line,
+            }
+
+        systemd_open_match = cls.SYSTEMD_SESSION_OPEN_PATTERN.search(log_line)
+
+        if systemd_open_match:
+            username = systemd_open_match.group("username")
+            session_id = systemd_open_match.group("session_id")
+            session_class = systemd_open_match.group("session_class")
+            session_type = systemd_open_match.group("session_type")
+
+            return {
+                "timestamp": timestamp,
+                "source": "linux",
+                "event_type": "session",
+                "action": "systemd_session_open",
+                "username": username,
+                "src_ip": None,
+                "dst_ip": None,
+                "src_port": None,
+                "dst_port": None,
+                "status": "success",
+                "severity": "low",
+                "message": (
+                    f"Systemd session {session_id} opened for user "
+                    f"{username} "
+                    f"(class={session_class}, type={session_type})"
+                ),
+                "raw_log": log_line,
+            }
+
+        systemd_close_match = cls.SYSTEMD_SESSION_CLOSE_PATTERN.search(log_line)
+
+        if systemd_close_match:
+            session_id = systemd_close_match.group("session_id")
+
+            return {
+                "timestamp": timestamp,
+                "source": "linux",
+                "event_type": "session",
+                "action": "systemd_session_close",
+                "username": None,
+                "src_ip": None,
+                "dst_ip": None,
+                "src_port": None,
+                "dst_port": None,
+                "status": "success",
+                "severity": "low",
+                "message": f"Systemd session {session_id} removed",
                 "raw_log": log_line,
             }
         return None
