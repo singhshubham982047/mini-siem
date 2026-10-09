@@ -106,6 +106,14 @@ class EventRepository:
         return list(db.scalars(statement).all())
 
     @staticmethod
+    def get_by_id(
+        db: Session,
+        event_id: int,
+    ) -> Optional[Event]:
+        """Retrieve a security event by its primary key."""
+        return db.get(Event, event_id)
+
+    @staticmethod
     def get_by_source_ip(
         db: Session,
         src_ip: str,

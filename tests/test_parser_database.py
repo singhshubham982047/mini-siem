@@ -60,14 +60,9 @@ def main():
         print(f"  Severity: {event.severity}")
 
         # 5. Verify the event can be retrieved
-        events = EventRepository.get_recent(
+        found = EventRepository.get_by_id(
             db=db,
-            limit=10,
-        )
-
-        found = next(
-            (item for item in events if item.id == event.id),
-            None,
+            event_id=event.id,
         )
 
         if found:

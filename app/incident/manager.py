@@ -38,6 +38,14 @@ class IncidentManager:
         ).first()
 
         if existing_incident:
+            if alert.rule_name == "authentication_privilege_correlation":
+                cls._link_auth_privilege_events(
+                    db=db,
+                    alert=alert,
+                    incident=existing_incident,
+                    reference_time=reference_time,
+                    window_minutes=window_minutes,
+                )
             return existing_incident
 
         # --------------------------------------------------
@@ -48,9 +56,27 @@ class IncidentManager:
             latest_event = None
 
             # ----------------------------------------------
+            # Authentication → Privilege Escalation
+            # ----------------------------------------------
+            if (
+                alert.rule_name == "authentication_privilege_correlation"
+                and alert.username
+            ):
+                latest_event = db.scalars(
+                    select(Event)
+                    .where(
+                        Event.username == alert.username,
+                        Event.event_type == "privilege_escalation",
+                        Event.status == "success",
+                    )
+                    .order_by(Event.timestamp.desc())
+                    .limit(1)
+                ).first()
+
+            # ----------------------------------------------
             # Sudo authentication alerts
             # ----------------------------------------------
-            if alert.rule_name == "sudo_authentication_failure" and alert.username:
+            elif alert.rule_name == "sudo_authentication_failure" and alert.username:
                 latest_event = db.scalars(
                     select(Event)
                     .where(
@@ -125,9 +151,38 @@ class IncidentManager:
             window_start = reference_time - timedelta(minutes=window_minutes)
 
             # ----------------------------------------------
+            # Authentication → Privilege Escalation
+            # ----------------------------------------------
+            if (
+                alert.rule_name == "authentication_privilege_correlation"
+                and alert.username
+            ):
+                statement = (
+                    select(Event)
+                    .where(
+                        Event.username == alert.username,
+                        Event.timestamp >= window_start,
+                        Event.timestamp <= reference_time,
+                        (
+                            (
+                                (Event.event_type == "authentication")
+                                & (Event.status.in_(["failure", "success"]))
+                            )
+                            | (
+                                (Event.event_type == "privilege_escalation")
+                                & (Event.status == "success")
+                            )
+                        ),
+                    )
+                    .order_by(Event.timestamp.asc())
+                )
+
+                related_events = list(db.scalars(statement).all())
+
+            # ----------------------------------------------
             # Sudo authentication alerts
             # ----------------------------------------------
-            if alert.rule_name == "sudo_authentication_failure" and alert.username:
+            elif alert.rule_name == "sudo_authentication_failure" and alert.username:
                 statement = (
                     select(Event)
                     .where(
@@ -140,7 +195,8 @@ class IncidentManager:
                     )
                     .order_by(Event.timestamp.asc())
                 )
-                related_events = db.scalars(statement).all()
+
+                related_events = list(db.scalars(statement).all())
 
             # ----------------------------------------------
             # IP-based authentication alerts
@@ -161,7 +217,8 @@ class IncidentManager:
                     )
                     .order_by(Event.timestamp.asc())
                 )
-                related_events = db.scalars(statement).all()
+
+                related_events = list(db.scalars(statement).all())
 
             # ----------------------------------------------
             # Port scan alerts
@@ -178,7 +235,8 @@ class IncidentManager:
                     )
                     .order_by(Event.timestamp.asc())
                 )
-                related_events = db.scalars(statement).all()
+
+                related_events = list(db.scalars(statement).all())
 
         # --------------------------------------------------
         # 5. Link events to the alert
@@ -201,6 +259,7 @@ class IncidentManager:
                 alert_id=alert.id,
                 event_id=event.id,
             )
+
             db.add(alert_event)
 
         # --------------------------------------------------
@@ -211,3 +270,78 @@ class IncidentManager:
         db.refresh(incident)
 
         return incident
+
+    @classmethod
+    def _link_auth_privilege_events(
+        cls,
+        db: Session,
+        alert: Alert,
+        incident: Incident,
+        reference_time=None,
+        window_minutes: int = DEFAULT_WINDOW_MINUTES,
+    ) -> None:
+        """Link authentication and privilege-escalation events to an alert."""
+
+        if not alert.username:
+            return
+
+        # Find the privilege-escalation event that triggered the alert.
+        if reference_time is None:
+            reference_event = db.scalars(
+                select(Event)
+                .where(
+                    Event.username == alert.username,
+                    Event.event_type == "privilege_escalation",
+                    Event.status == "success",
+                )
+                .order_by(Event.timestamp.desc())
+                .limit(1)
+            ).first()
+
+            if reference_event is None:
+                return
+
+            reference_time = reference_event.timestamp
+
+        window_start = reference_time - timedelta(minutes=window_minutes)
+
+        events = db.scalars(
+            select(Event)
+            .where(
+                Event.username == alert.username,
+                Event.timestamp >= window_start,
+                Event.timestamp <= reference_time,
+                (
+                    (
+                        (Event.event_type == "authentication")
+                        & Event.status.in_(["failure", "success"])
+                    )
+                    | (
+                        (Event.event_type == "privilege_escalation")
+                        & (Event.status == "success")
+                    )
+                ),
+            )
+            .order_by(Event.timestamp.asc())
+        ).all()
+
+        for event in events:
+            existing_link = db.scalar(
+                select(AlertEvent)
+                .where(
+                    AlertEvent.alert_id == alert.id,
+                    AlertEvent.event_id == event.id,
+                )
+                .limit(1)
+            )
+
+            if existing_link is None:
+                db.add(
+                    AlertEvent(
+                        alert_id=alert.id,
+                        event_id=event.id,
+                    )
+                )
+
+        db.commit()
+        db.refresh(incident)

@@ -12,6 +12,10 @@ from app.services.detection_rule_service import is_rule_enabled
 from app.detection.repeated_privilege_escalation import (
     RepeatedPrivilegeEscalationDetector,
 )
+from app.detection.suspicious_pkexec import SuspiciousPkexecDetector
+from app.detection.auth_privilege_correlation import (
+    AuthPrivilegeCorrelationDetector,
+)
 
 
 class DetectionEngine:
@@ -196,4 +200,48 @@ class DetectionEngine:
 
             if alert:
                 cls._handle_alert(db, alert, event, alerts)
+
+        # ==================================================
+        # RULE 8: SUSPICIOUS PKEXEC ACTIVITY
+        # ==================================================
+
+        if (
+            event.event_type == "privilege_escalation"
+            and event.action == "pkexec_session_open"
+            and event.status == "success"
+            and event.username
+            and is_rule_enabled("suspicious_pkexec_activity")
+        ):
+            alert = SuspiciousPkexecDetector.detect(
+                db=db,
+                event=event,
+            )
+
+            if alert:
+                cls._handle_alert(db, alert, event, alerts)
+
+        # ==================================================
+        # RULE 9: AUTHENTICATION → PRIVILEGE ESCALATION
+        # ==================================================
+
+        if (
+            event.event_type == "privilege_escalation"
+            and event.status == "success"
+            and event.username
+            and is_rule_enabled("authentication_privilege_correlation")
+        ):
+            alert = AuthPrivilegeCorrelationDetector.detect(
+                db=db,
+                event=event,
+                failure_threshold=3,
+                window_minutes=5,
+            )
+
+            if alert:
+                cls._handle_alert(
+                    db,
+                    alert,
+                    event,
+                    alerts,
+                )
         return alerts
