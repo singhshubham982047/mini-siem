@@ -21,6 +21,8 @@ class RepeatedPrivilegeEscalationDetector:
 
         if event.status != "success":
             return None
+        if event.action not in {"sudo_command", "pkexec_session_open"}:
+            return None
 
         if not event.username:
             return None
@@ -32,6 +34,7 @@ class RepeatedPrivilegeEscalationDetector:
             .where(
                 Event.event_type == "privilege_escalation",
                 Event.status == "success",
+                Event.action.in_(["sudo_command", "pkexec_session_open"]),
                 Event.username == event.username,
                 Event.timestamp >= window_start,
                 Event.timestamp <= event.timestamp,
@@ -45,8 +48,7 @@ class RepeatedPrivilegeEscalationDetector:
             return None
 
         existing_alert = db.scalar(
-            select(Alert)
-            .where(
+            select(Alert).where(
                 Alert.rule_name == RepeatedPrivilegeEscalationDetector.RULE_NAME,
                 Alert.username == event.username,
                 Alert.status == "open",
@@ -54,7 +56,7 @@ class RepeatedPrivilegeEscalationDetector:
         )
 
         if existing_alert:
-            return existing_alert
+            return None
 
         alert = Alert(
             rule_name=RepeatedPrivilegeEscalationDetector.RULE_NAME,

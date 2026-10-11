@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-
+import uuid
 from app.database.connection import SessionLocal
 from app.database.models import Event
 from app.detection.engine import DetectionEngine
@@ -13,6 +13,7 @@ def main():
         print("=" * 60)
 
         base_time = datetime.now(timezone.utc)
+        test_username = f"privilege-test-{uuid.uuid4().hex[:8]}"
 
         events = []
 
@@ -28,7 +29,7 @@ def main():
                 source="linux",
                 event_type="privilege_escalation",
                 action="sudo_command",
-                username="privilege-test-user",
+                username=test_username,
                 src_ip=None,
                 dst_ip=None,
                 src_port=None,
@@ -88,10 +89,7 @@ def main():
             )
         elif len(matching_alerts) > 1:
             print("\n❌ TEST FAILED")
-            print(
-                f"Expected 1 alert, but received "
-                f"{len(matching_alerts)}."
-            )
+            print(f"Expected 1 alert, but received " f"{len(matching_alerts)}.")
         else:
             print("\n❌ TEST FAILED")
             print("No repeated privilege escalation alert generated.")

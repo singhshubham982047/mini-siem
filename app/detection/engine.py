@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
-
-from app.database.models import Event
+from sqlalchemy import select
+from app.database.models import Event, Incident
 from app.detection.brute_force import BruteForceDetector
 from app.detection.suspicious_login import SuspiciousLoginDetector
 from app.detection.multiple_users import MultipleUsersDetector
@@ -31,15 +31,11 @@ class DetectionEngine:
         event: Event,
         alerts: list,
     ) -> None:
-        """
-        Record a generated alert, create its incident,
-        and print a summary.
+        """Associate an alert with its incident and report its status."""
 
-        This is only ever called when an alert exists,
-        so `incident` is always assigned before use.
-        """
-
-        alerts.append(alert)
+        existing_incident = db.scalars(
+            select(Incident).where(Incident.alert_id == alert.id).limit(1)
+        ).first()
 
         incident = IncidentManager.create_for_alert(
             db=db,
@@ -47,7 +43,13 @@ class DetectionEngine:
             reference_time=event.timestamp,
         )
 
-        print("\n🚨 INCIDENT CREATED")
+        alerts.append(alert)
+
+        if existing_incident:
+            print("\n🔁 EXISTING INCIDENT UPDATED")
+        else:
+            print("\n🚨 INCIDENT CREATED")
+
         print(f"  Incident ID: {incident.id}")
         print(f"  Alert ID: {alert.id}")
         print(f"  Severity: {incident.severity}")
@@ -87,7 +89,6 @@ class DetectionEngine:
 
             if alert:
                 cls._handle_alert(db, alert, event, alerts)
-
         # ==================================================
         # RULE 2: SUCCESSFUL LOGIN AFTER MULTIPLE FAILURES
         # ==================================================
