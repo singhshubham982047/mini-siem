@@ -1,0 +1,472 @@
+::: {align="center"}
+# 🛡️ Mini SIEM & Security Analytics Engine
+
+**A local Security Information and Event Management (SIEM) platform for
+collecting Linux authentication logs, detecting suspicious activity, and
+investigating security alerts.**
+
+![Python](https://img.shields.io/badge/Python-3.14%2B-3776AB?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/UI-Streamlit-FF4B4B?logo=streamlit&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Linux-FCC624?logo=linux&logoColor=black)
+![Status](https://img.shields.io/badge/Status-Local%20Development-success)
+:::
+
+------------------------------------------------------------------------
+
+## Overview
+
+Mini SIEM is a hands-on cybersecurity project that demonstrates a basic
+security monitoring pipeline on a Linux host. It watches the system
+authentication log, parses relevant events, stores structured records in
+PostgreSQL, evaluates detection rules, and presents events, alerts,
+incidents, and log-source information in a Streamlit dashboard.
+
+The project is intended for learning, portfolio demonstration, and
+controlled lab testing. It is **not a replacement for an enterprise
+SIEM** and should not be treated as a production security control
+without further hardening and validation.
+
+## Key capabilities
+
+-   **Linux authentication-log collection** from `/var/log/auth.log`
+    using a file watcher and a systemd-managed collector.
+-   **Structured event storage** in PostgreSQL.
+-   **Security event dashboard** built with Streamlit.
+-   **Rule-based detections** for selected authentication and
+    privilege-related patterns.
+-   **Alert and incident workflow** for reviewing detected activity.
+-   **Log-source tracking** to show configured collection sources.
+-   **Automated tests** for repositories, parsing, collection, and
+    detection behavior.
+
+### Detection coverage
+
+Detection modules currently present in the project include:
+
+-   SSH brute-force activity
+-   Suspicious login patterns, including successful login after multiple
+    failures
+-   Port-scan patterns
+-   Activity involving multiple users
+-   Suspicious `sudo` commands
+-   Suspicious `pkexec` activity
+-   Authentication/privilege-event correlation
+-   Repeated successful privilege-escalation command activity
+
+Detection logic is rule-based and should be tuned against your
+environment. A rule firing is an investigative signal, not proof of
+malicious activity. In particular, repeated privileged commands may also
+occur during legitimate administration.
+
+## Architecture
+
+``` mermaid
+flowchart TD
+    A[Linux host] --> B[/var/log/auth.log/]
+    B --> C[File watcher]
+    C --> D[Collector manager and parser]
+    D --> E[(PostgreSQL)]
+    E --> F[Detection engine]
+    F --> G[Detection rules]
+    G --> H[Alerts]
+    H --> I[Incident manager]
+    E --> J[Streamlit dashboard]
+    H --> J
+    I --> J
+    J --> K[Overview / Events / Alerts / Incidents / Log Sources]
+```
+
+### Event pipeline
+
+1.  A new line is appended to the Linux authentication log.
+2.  The file watcher passes new content to the collector.
+3.  The collector parses the line into a structured event.
+4.  The event is saved to PostgreSQL.
+5.  The detection engine evaluates enabled rules.
+6.  Matching rules may create alerts and associated incidents.
+7.  The Streamlit dashboard reads stored data for investigation.
+
+## Technology stack
+
+  Area                       Technology
+  -------------------------- -------------------------------------------
+  Language                   Python
+  Dashboard                  Streamlit
+  Database                   PostgreSQL
+  ORM / database access      SQLAlchemy
+  Log collection             Python file watcher and collector service
+  Linux service management   systemd
+  Testing                    Python test modules
+
+## Repository layout
+
+The following is a high-level view of the project. Your local repository
+may contain additional files.
+
+``` text
+mini-siem/
+├── app/
+│   ├── analytics/
+│   ├── collector/
+│   │   ├── collector_manager.py
+│   │   └── file_watcher.py
+│   ├── dashboard/
+│   │   ├── data.py
+│   │   ├── overview.py
+│   │   ├── security_events.py
+│   │   ├── alerts.py
+│   │   ├── incidents.py
+│   │   └── log_sources.py
+│   ├── database/
+│   │   ├── connection.py
+│   │   ├── models.py
+│   │   └── repository.py
+│   ├── detection/
+│   │   ├── brute_force.py
+│   │   ├── engine.py
+│   │   ├── multiple_users.py
+│   │   ├── port_scan.py
+│   │   ├── suspicious_login.py
+│   │   ├── suspicious_pkexec.py
+│   │   ├── suspicious_sudo.py
+│   │   └── repeated_privilege_escalation.py
+│   ├── config.py
+│   └── run_real_auth_collector.py
+├── tests/
+├── sample_logs/
+├── .env.example
+├── requirements.txt
+└── README.md
+```
+
+> This tree is illustrative. Keep the file names in this README aligned
+> with the actual files in your Git repository before publishing.
+
+## Requirements
+
+-   Linux host (the collector setup documented here targets systems that
+    use `/var/log/auth.log`, such as Ubuntu).
+-   Python version compatible with the project's `requirements.txt` (the
+    development environment has been tested with Python 3.14.4).
+-   PostgreSQL server and client tools.
+-   Git.
+-   Permission to read `/var/log/auth.log`; the collector service should
+    be configured with the minimum permissions needed.
+
+## Installation
+
+### 1. Clone the repository
+
+Replace the example URL with your actual GitHub repository URL.
+
+``` bash
+git clone https://github.com/<YOUR_GITHUB_USERNAME>/<YOUR_REPOSITORY>.git
+cd <YOUR_REPOSITORY>
+```
+
+### 2. Create and activate a virtual environment
+
+``` bash
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+```
+
+### 3. Install Python dependencies
+
+``` bash
+pip install -r requirements.txt
+```
+
+### 4. Configure PostgreSQL
+
+Create a database and a dedicated application user. Choose your own
+strong password and do not reuse the example values.
+
+``` bash
+sudo -u postgres psql
+```
+
+At the PostgreSQL prompt, run the following after replacing the password
+placeholder:
+
+``` sql
+CREATE USER siem_user WITH PASSWORD 'REPLACE_WITH_A_STRONG_PASSWORD';
+CREATE DATABASE mini_siem OWNER siem_user;
+\q
+```
+
+If your database or user already exists, do not run the creation
+commands again; use your existing setup or update it carefully.
+
+### 5. Configure environment variables
+
+Copy the example environment file if the repository contains one:
+
+``` bash
+cp .env.example .env
+chmod 600 .env
+```
+
+Edit `.env` and set the database connection string using the **exact
+variable name and URL format expected by your version of `app/config.py`
+and `app/database/connection.py`**. A typical local PostgreSQL URL has
+this shape:
+
+``` text
+DATABASE_URL=postgresql+psycopg://siem_user:REPLACE_WITH_A_STRONG_PASSWORD@localhost:5432/mini_siem
+```
+
+The URL above is an example, not a guarantee of the exact driver or
+variable name in every revision. Check your code and installed
+PostgreSQL driver before using it. If your repository does not yet
+include `.env.example`, create a safe template that contains
+placeholders only---never real credentials.
+
+**Never commit `.env`, database passwords, tokens, or other secrets to
+GitHub.**
+
+### 6. Initialize the database schema
+
+Use the schema initialization or migration process provided by your
+current project version. If your project currently creates tables
+through SQLAlchemy metadata, follow the initialization method in
+`app/database/connection.py` or the project setup script. Do not assume
+tables are initialized automatically unless you have verified that
+behavior.
+
+### 7. Start the dashboard
+
+Use the actual Streamlit entry-point filename in your repository. For
+example, if the entry point is `app/dashboard.py`:
+
+``` bash
+streamlit run app/dashboard.py
+```
+
+If your entry point is named differently, substitute that path.
+Streamlit will print a local URL, commonly `http://localhost:8501`.
+
+### 8. Start the collector
+
+For a foreground test, use the project's collector entry point:
+
+``` bash
+python -m app.run_real_auth_collector
+```
+
+The collector needs read access to `/var/log/auth.log`. Prefer a
+dedicated service account with narrowly scoped permissions over running
+the application as root. If you have already configured the
+`mini-siem-collector` systemd service, manage it using the service
+commands in the next section instead of starting a second collector
+process.
+
+## Running the collector with systemd
+
+The local development setup uses a systemd unit named
+`mini-siem-collector.service`.
+
+Check status:
+
+``` bash
+sudo systemctl status mini-siem-collector --no-pager -l
+```
+
+Start, restart, or stop the service:
+
+``` bash
+sudo systemctl start mini-siem-collector
+sudo systemctl restart mini-siem-collector
+sudo systemctl stop mini-siem-collector
+```
+
+Follow service logs:
+
+``` bash
+sudo journalctl -u mini-siem-collector -f
+```
+
+Enable it at boot:
+
+``` bash
+sudo systemctl enable mini-siem-collector
+```
+
+**Important:** the exact service unit and permissions depend on your
+local installation. Review the unit before enabling it on another host.
+Do not run both the systemd collector and a foreground collector against
+the same log unless duplicate collection is intentionally handled.
+
+## Testing
+
+Run commands from the repository root with the virtual environment
+activated.
+
+### Syntax / import compilation
+
+``` bash
+python -m compileall -q app tests
+```
+
+### Focused detection and regression tests
+
+``` bash
+python -m tests.test_repeated_privilege_escalation
+python -m tests.test_detection_engine
+python -m tests.test_brute_force
+python -m tests.test_suspicious_sudo
+python -m tests.test_suspicious_pkexec
+```
+
+Additional test modules available in this project have included
+repository, authentication-parser, parser/database, file-watcher,
+collector-pipeline, incident-manager, suspicious-login, multi-user,
+port-scan, and authentication/privilege-correlation tests. Run a module
+only if it exists in your current checkout.
+
+### Test safety notes
+
+-   Some tests insert events, alerts, or incidents into PostgreSQL. Use
+    a dedicated test database when possible.
+-   Tests that reuse fixed usernames or source identifiers can interact
+    with previous test data. Unique test identifiers improve isolation.
+-   Review test output and database records; a successful process exit
+    does not prove that every detection rule has been validated against
+    all real-world cases.
+-   Do not write fabricated records into `/var/log/auth.log` on a real
+    host. Use the project's sample logs or controlled test fixtures.
+
+## Screenshots
+
+Add genuine screenshots from your running application so visitors can
+see the dashboard. Store them in a directory such as `docs/screenshots/`
+and use these suggested names:
+
+``` text
+docs/
+└── screenshots/
+    ├── overview.png
+    ├── security-events.png
+    ├── alerts.png
+    ├── incidents.png
+    └── log-sources.png
+```
+
+After adding the images, uncomment or adapt the following Markdown:
+
+``` markdown
+### Overview
+![Mini SIEM overview](docs/screenshots/overview.png)
+
+### Security events
+![Security events](docs/screenshots/security-events.png)
+
+### Alerts
+![Alerts](docs/screenshots/alerts.png)
+
+### Incidents
+![Incidents](docs/screenshots/incidents.png)
+
+### Log sources
+![Log sources](docs/screenshots/log-sources.png)
+```
+
+Before capturing screenshots, hide usernames, IP addresses, hostnames,
+database details, and any other sensitive information that should not be
+public. Use synthetic or sanitized lab events where possible.
+
+## Security and responsible use
+
+-   Use this project only on systems and logs you own or are authorized
+    to monitor.
+-   Protect `.env` and database credentials; keep secrets out of commits
+    and screenshots.
+-   Grant the collector only the permissions it needs to read the
+    selected log source.
+-   Restrict PostgreSQL to trusted local connections unless remote
+    access is explicitly required and secured.
+-   Do not expose the Streamlit development server directly to the
+    public internet. Use appropriate network controls and a secure
+    deployment design.
+-   Treat alerts as triage signals; validate findings with surrounding
+    events and host context.
+-   Configure log retention, backups, monitoring, and access controls
+    before any production deployment.
+
+## Troubleshooting
+
+### Database connection fails
+
+-   Confirm PostgreSQL is running: `sudo systemctl status postgresql`.
+-   Verify database name, username, password, host, port, and driver in
+    `.env`.
+-   Check that the connection string is parsed correctly; URL-special
+    characters in passwords may need URL encoding.
+-   Never paste credentials into public issues or commit them to Git.
+
+### Collector cannot read `/var/log/auth.log`
+
+-   Check the file's permissions and the collector service's effective
+    user and groups.
+-   Review logs with
+    `sudo journalctl -u mini-siem-collector -n 100 --no-pager`.
+-   Avoid broad permissions such as making the authentication log
+    world-readable.
+
+### Dashboard has no new events
+
+-   Confirm the collector is running and reading the expected log
+    source.
+-   Confirm new parsed events are being written to PostgreSQL.
+-   Check the dashboard's database configuration and refresh the page.
+-   Existing log lines may be skipped on startup depending on the
+    file-watcher configuration; test with a new, legitimate
+    authentication event rather than editing the system log manually.
+
+### A detection fires unexpectedly
+
+-   Inspect the rule's conditions and the related events in the
+    configured time window.
+-   Distinguish normal administrative activity from genuinely suspicious
+    behavior.
+-   Tune thresholds and filters only after reviewing test results and
+    documenting the trade-offs.
+
+## Current project status
+
+The local development environment has been exercised with the PostgreSQL
+database, systemd-managed authentication-log collector, Streamlit
+dashboard, and detection tests. Regression tests reported by the
+developer were passing during the latest verification session. This is a
+snapshot of the development state, not a guarantee of production
+readiness.
+
+## Roadmap
+
+-   [ ] Add sanitized dashboard screenshots.
+-   [ ] Verify the README commands against a clean clone.
+-   [ ] Improve test isolation and test-database separation.
+-   [ ] Continue tuning detection thresholds to reduce false positives.
+-   [ ] Add deployment and operational hardening documentation.
+-   [ ] Evaluate a secure AWS EC2 deployment.
+
+## Contributing
+
+Issues and pull requests are welcome. When reporting a bug, include
+sanitized logs, reproduction steps, the affected rule, and the expected
+versus actual behavior. Do not include credentials or sensitive
+production log data.
+
+## License
+
+Choose and add a license before publishing if you intend others to reuse
+the code. Do not claim a license until the repository contains the
+corresponding `LICENSE` file.
+
+------------------------------------------------------------------------
+
+::: {align="center"}
+**Built as a practical cybersecurity and security-monitoring project.**
+:::
