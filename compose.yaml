@@ -32,6 +32,8 @@ services:
     ports:
       - "${DASHBOARD_PORT:-8501}:8501"
     command:
+      - python
+      - -m
       - streamlit
       - run
       - app/streamlit_app.py
