@@ -5,7 +5,9 @@ from app.database.connection import SessionLocal
 from app.database.models import LogSource
 
 
-AUTH_LOG_PATH = "/var/log/auth.log"
+import os
+
+AUTH_LOG_PATH = os.getenv("REAL_AUTH_LOG_PATH", "/var/log/auth.log")
 LOG_SOURCE_NAME = "linux-auth-real"
 
 

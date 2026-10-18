@@ -59,6 +59,20 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+
+  real-auth-collector:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-siem_user}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-mini_siem}
+      REAL_AUTH_LOG_PATH: /host_logs/auth.log
+    command: ["python", "-m", "app.run_real_auth_collector"]
+    volumes:
+      - /var/log/auth.log:/host_logs/auth.log:ro
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   demo_logs:

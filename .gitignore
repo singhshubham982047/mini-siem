@@ -4,3 +4,27 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .streamlit/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Python generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+venv/
+.venv/
+
+# Local databases and logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.backup
+*.bkp
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
